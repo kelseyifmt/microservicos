@@ -1,72 +1,56 @@
 Vagrant.configure("2") do |config|
+  # Configuração para encaminhamento da chave SSH
+  config.ssh.forward_agent = true
 
-    # ------------------------------------
-    # Definição do servidor web 01
-    config.vm.define "srv-web01" do |srv_web01|
-      srv_web01.vm.box = "ubuntu/trusty64"
-      srv_web01.vm.hostname = "srvweb01"
-      srv_web01.vm.network "private_network", ip: "10.0.0.11"
-      srv_web01.vm.provider "virtualbox" do |v|
-        v.memory = 1024
-        v.cpus = 1
+  # Configuração das três máquinas
+  (1..2).each do |i|
+    config.vm.define "srvweb#{i}" do |srvweb|
+      # Configurações específicas da máquina
+      srvweb.vm.box = "ubuntu/trusty64"  # Box Ubuntu 14.04 LTS
+      srvweb.vm.hostname = "srvweb#{i}" # Definindo o hostname
+      srvweb.vm.network "private_network", ip: "10.0.0.#{i + 10}", virtualbox__intnet: true
+
+      # Limitando CPU e memória
+      srvweb.vm.provider "virtualbox" do |vb|
+        vb.memory = 1024
+        vb.cpus = 1
       end
-      
-      srv_web01.vm.provision "shell", inline: <<-SHELL
-        sudo apt-get update   
-        sudo apt-get install -y apache2 openssh-server   
-      SHELL
-    end
-  
-    # ------------------------------------
-    # Definição do servidor web 02
-    config.vm.define "srv-web02" do |srv_web02|
-      srv_web02.vm.box = "ubuntu/trusty64"
-      srv_web02.vm.hostname = "srvweb02"
-      srv_web02.vm.network "private_network", ip: "10.0.0.12"
-      srv_web02.vm.provider "virtualbox" do |v|
-        v.memory = 1024
-        v.cpus = 1
+
+      # Configurações específicas para servidor web (máquinas 1 e 2)
+      if i <= 2
+        srvweb.vm.provision "shell", inline: <<-SHELL
+          sudo apt-get update
+          sudo apt-get install -y apache2
+        #PASSWORD DO ROOT
+          echo "root:vagrant" | sudo chpasswd
+        #PERMITINDO ROOT LOGIN
+          sudo sed -i 's/^PermitRootLogin without-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+          sudo service ssh restart
+        SHELL
       end
-      
-      srv_web02.vm.provision "shell", inline: <<-SHELL
-        sudo apt-get update
-        sudo apt-get install -y apache2 openssh-server
-      SHELL
     end
-  
-    # ------------------------------------
-    # Definição do servidor ansible - MONITOR
-    config.vm.define "srvansible" do |srvansible|
-      srvansible.vm.box = "ubuntu/trusty64"
-      srvansible.vm.hostname = "srvansible"
-      srvansible.vm.network "private_network", ip: "10.0.0.10"
-      srvansible.vm.provider "virtualbox" do |v|
-        v.memory = 1024
-        v.cpus = 1
-      end
-      
-      srvansible.vm.provision "shell", inline: <<-SHELL
-        sudo apt-get update
-        sudo apt-get install -y ansible ansible-core
-        sudo apt-get install -y openssh-client sshpass
-              
-        # Criação da chave SSH
-        ssh-keygen -t rsa -N "" -f ~/.ssh/id_rsa
-        
-        echo "IM KELSEY SANTOS" > ~/file.txt
-        echo "root:vagrant" | sudo chpasswd
-        # Copiando a chave SSH para os servidores web
-        sshpass -p "vagrant" ssh-copy-id 10.0.0.11
-        sshpass -p "vagrant" ssh-copy-id 10.0.0.12
-      SHELL
-    end
-  
-    # Adicionando a chave pública de Vagrant user dos servidor Ansible aos servidores web
-    # config.vm.provision "shell", inline: <<-SHELL
-    #   mkdir -p ~/.ssh
-    #   chmod 700 ~/.ssh
-    #   # cat ~/.ssh/id_rsa >> ~/.ssh/authorized_keys
-    #   echo "chave_publica_userVagrant_do_srvansible" >> ~/.ssh/authorized_keys
-    #   chmod 600 ~/.ssh/authorized_keys
-    # SHELL
   end
+
+  # Configurações específicas para o Ansible (máquina3)
+  config.vm.define "ansible" do |ansible|
+    ansible.vm.box = "ubuntu/trusty64"  # Box Ubuntu 14.04 LTS
+    ansible.vm.hostname = "ansible"
+    ansible.vm.network "private_network", ip: "10.0.0.13", virtualbox__intnet: true
+
+    # Limitando CPU e memória
+    ansible.vm.provider "virtualbox" do |vb|
+      vb.memory = 1024
+      vb.cpus = 1
+    end
+
+    # Provisionamento do Ansible
+    ansible.vm.provision "shell", inline: <<-SHELL
+      sudo apt-get update
+      sudo apt-get install -y ansible sshpass
+      sudo ssh-keygen -t rsa -N '' -f ~/.ssh/id_rsa
+    # Configurando o Ansible para acessar máquinas1 e máquinas2 por chave SSH
+      sshpass -p "vagrant" ssh-copy-id -o StrictHostKeyChecking=no 10.0.0.11
+      sshpass -p "vagrant" ssh-copy-id -o StrictHostKeyChecking=no 10.0.0.12
+    SHELL
+  end
+end
