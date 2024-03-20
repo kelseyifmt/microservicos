@@ -2,7 +2,7 @@ Vagrant.configure("2") do |config|
   # Configuração para encaminhamento da chave SSH
   config.ssh.forward_agent = true
 
-  # Configuração das três máquinas
+  # Configuração das duas máquinas
   (1..2).each do |i|
     config.vm.define "srvweb#{i}" do |srvweb|
       # Configurações específicas da máquina
@@ -19,6 +19,11 @@ Vagrant.configure("2") do |config|
       # Configurações específicas para servidor web (máquinas 1 e 2)
       if i <= 2
         srvweb.vm.provision "shell", inline: <<-SHELL
+        # CONFIGURANDO SOURCE.LIST
+          sudo sed -i '/^#/d' /etc/apt/sources.list
+          sudo sed -i 's/^deb-src/#deb-src/' /etc/apt/sources.list
+          sudo sed -i '/^security.ubuntu.com/d' /etc/apt/sources.list
+
           sudo apt-get update
           sudo apt-get install -y apache2
         #PASSWORD DO ROOT
